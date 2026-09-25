@@ -56,10 +56,20 @@ docker compose down -v --remove-orphans
 | 分区、读数状态迁移 | operator/reviewer/admin |
 | 计划状态复核 | reviewer/admin |
 | 提交阀门远程启动请求 | operator/admin |
-| 独立确认并启动阀门 | reviewer/admin，且不得与请求人相同 |
+| 独立确认并启动阀门 | reviewer/admin，且不得与请求人相同；启动前复核无冲突 |
 | 删除记录 | admin |
 
 阀门执行不能通过通用状态接口直接从 `planned` 进入 `running`。操作员先调用 `POST /api/executions/:id/control-request`，另一位复核人再调用 `POST /api/executions/:id/control-confirm`；两步都要求显式确认、正确版本号，并分别写入 `control_request`、`control_confirm` 审计事件。
+
+### 启动前复核（夜班防重复浇水/防旧读数）
+
+阀门执行通过 `zoneCode`、`planCode` 绑定到温室分区与灌溉计划，土壤读数通过 `zoneCode` 归属分区，灌溉计划携带 `stopMoistureLine` 计划停灌线。复核人在控制详情（`GET /api/executions/:id/control-detail`）确认时，系统实时核对并在确认瞬间冻结检查快照：
+
+- 同分区是否已有 `running` 任务（该分区可能已经浇过水）；
+- 该分区最近一次 `validated` 已校验读数，及其含水率、读数时间（有效窗口默认 30 分钟，禁止拿半小时前的读数启动）；
+- 计划停灌线，读数含水率达到/超过停灌线即视为无需浇水。
+
+任一冲突都会在控制详情写明**读数时间、含水率和冲突编号**（批次号 `CF-<UTC时间>-<冲突数>-<序号>`，写入 `control_conflict` 审计事件），执行状态保持 `planned`（待启动），不写确认人。冲突解决（停掉同分区任务、补测并校验新读数等）后可凭同一版本号重新复核；全部检查通过才进入双人启动并把当时的检查快照存入 `controlCheckSnapshot`。计划归属分区与执行分区不一致、分区或计划不存在，都会在创建/更新执行记录时直接拒绝（422）。
 
 ## 技术栈
 

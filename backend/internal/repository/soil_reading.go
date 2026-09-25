@@ -12,6 +12,8 @@ import (
 type SoilReadingRepository interface {
 	List(context.Context, dto.PageQuery) (Page[model.SoilReading], error)
 	Get(context.Context, uint) (model.SoilReading, error)
+	FindByCode(context.Context, string) (model.SoilReading, error)
+	LatestValidatedByZone(context.Context, string) (model.SoilReading, error)
 	Create(context.Context, *model.SoilReading) error
 	Update(context.Context, uint, uint, *model.SoilReading) error
 	Delete(context.Context, uint) error
@@ -31,6 +33,19 @@ func (r *soilReadingRepository) List(ctx context.Context, q dto.PageQuery) (Page
 }
 func (r *soilReadingRepository) Get(ctx context.Context, id uint) (model.SoilReading, error) {
 	return r.store.Get(ctx, id)
+}
+func (r *soilReadingRepository) FindByCode(ctx context.Context, code string) (model.SoilReading, error) {
+	return r.store.FindByCode(ctx, code)
+}
+
+// LatestValidatedByZone returns the most recent validated soil reading measured
+// in the given zone. Readings in any other state are not trusted evidence.
+func (r *soilReadingRepository) LatestValidatedByZone(ctx context.Context, zoneCode string) (model.SoilReading, error) {
+	var item model.SoilReading
+	err := r.store.db.WithContext(ctx).
+		Where("zone_code = ? AND status = ?", zoneCode, "validated").
+		Order("effective_at DESC, id DESC").First(&item).Error
+	return item, err
 }
 func (r *soilReadingRepository) Create(ctx context.Context, item *model.SoilReading) error {
 	return r.store.Create(ctx, item)

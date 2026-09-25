@@ -17,6 +17,9 @@ type CreateValveExecution struct {
 	EffectiveAt time.Time `json:"effectiveAt" binding:"required"`
 	Evidence    string    `json:"evidence" binding:"max=2000"`
 	RelatedCode string    `json:"relatedCode" binding:"max=64"`
+	// ZoneCode and PlanCode bind the execution to its zone and irrigation plan.
+	ZoneCode string `json:"zoneCode" binding:"required,min=2,max=64"`
+	PlanCode string `json:"planCode" binding:"required,min=2,max=64"`
 }
 
 type UpdateValveExecution struct {
@@ -32,4 +35,8 @@ type UpdateValveExecution struct {
 	EffectiveAt     time.Time `json:"effectiveAt" binding:"required"`
 	Evidence        string    `json:"evidence" binding:"max=2000"`
 	RelatedCode     string    `json:"relatedCode" binding:"max=64"`
+	// ZoneCode/PlanCode may only be changed while the execution has not yet
+	// entered the control workflow.
+	ZoneCode string `json:"zoneCode" binding:"required,min=2,max=64"`
+	PlanCode string `json:"planCode" binding:"required,min=2,max=64"`
 }

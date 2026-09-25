@@ -99,6 +99,14 @@ func (s *Store[T]) CountByStatus(ctx context.Context) (map[string]int64, error) 
 	return counts, rows.Err()
 }
 
+// FindByCode loads a single aggregate by its human-facing code. A missing row
+// is reported as gorm.ErrRecordNotFound.
+func (s *Store[T]) FindByCode(ctx context.Context, code string) (T, error) {
+	var item T
+	err := s.db.WithContext(ctx).Where("code = ?", code).First(&item).Error
+	return item, err
+}
+
 func normalizePage(page, pageSize int) (int, int) {
 	if page < 1 {
 		page = 1

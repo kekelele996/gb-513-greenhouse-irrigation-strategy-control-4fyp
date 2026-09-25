@@ -37,7 +37,7 @@ func New(cfg config.Config, db *gorm.DB, redisClient *redis.Client, logger *slog
 	greenhouseZoneService := service.NewGreenhouseZoneService(greenhouseZoneRepository, securityService)
 	soilReadingService := service.NewSoilReadingService(soilReadingRepository, securityService)
 	irrigationPlanService := service.NewIrrigationPlanService(irrigationPlanRepository, securityService)
-	valveExecutionService := service.NewValveExecutionService(valveExecutionRepository, securityService)
+	valveExecutionService := service.NewValveExecutionService(valveExecutionRepository, greenhouseZoneRepository, irrigationPlanRepository, soilReadingRepository, securityService)
 	greenhouseZoneHandler := handler.NewGreenhouseZoneHandler(greenhouseZoneService)
 	soilReadingHandler := handler.NewSoilReadingHandler(soilReadingService)
 	irrigationPlanHandler := handler.NewIrrigationPlanHandler(irrigationPlanService)

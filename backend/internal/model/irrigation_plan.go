@@ -16,6 +16,11 @@ type IrrigationPlan struct {
 	EffectiveAt time.Time `json:"effectiveAt"`
 	Evidence    string    `json:"evidence" gorm:"size:2000"`
 	RelatedCode string    `json:"relatedCode" gorm:"size:64;index"`
+	// ZoneCode identifies the greenhouse zone governed by this strategy version.
+	ZoneCode string `json:"zoneCode" gorm:"size:64;index"`
+	// StopMoistureLine is the soil moisture percentage at which irrigation must
+	// stop. A validated reading at or above this line blocks a remote start.
+	StopMoistureLine float64 `json:"stopMoistureLine"`
 }
 
 func (item *IrrigationPlan) GetBase() *BaseModel { return &item.BaseModel }

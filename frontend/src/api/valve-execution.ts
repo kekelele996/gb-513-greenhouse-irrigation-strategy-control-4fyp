@@ -1,6 +1,6 @@
 
 import { request } from './client';
-import type { DomainRecord } from '../types/domain';
+import type { ControlDetail, DomainRecord } from '../types/domain';
 
 export async function listValveExecution(page = 1, pageSize = 20, search = '') {
   return request<DomainRecord[]>(`/executions?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(search)}`);
@@ -12,6 +12,9 @@ export async function transitionValveExecution(id: number, status: string, expec
   return request<DomainRecord>(`/executions/${id}/transition`, {
     method: 'POST', body: JSON.stringify({ status, expectedVersion, reason }),
   });
+}
+export async function getValveControlDetail(id: number) {
+  return request<ControlDetail>(`/executions/${id}/control-detail`);
 }
 export async function requestValveControl(id: number, expectedVersion: number) {
   return request<DomainRecord>(`/executions/${id}/control-request`, {

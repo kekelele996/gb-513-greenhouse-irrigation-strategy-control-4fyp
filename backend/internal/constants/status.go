@@ -1,7 +1,14 @@
 package constants
 
+import "time"
+
 // Shared status values are mirrored in frontend/src/types/status.ts. Keeping
 // the lists explicit makes state-machine drift visible during code review.
+
+// PreStartReadingFreshness limits how old the latest validated soil reading
+// may be when a reviewer confirms a remote valve start. Night-shift operators
+// must not start irrigation against a reading taken half an hour earlier.
+const PreStartReadingFreshness = 30 * time.Minute
 
 type ZoneState string
 

@@ -17,6 +17,7 @@ type CreateSoilReading struct {
 	EffectiveAt time.Time `json:"effectiveAt" binding:"required"`
 	Evidence    string    `json:"evidence" binding:"max=2000"`
 	RelatedCode string    `json:"relatedCode" binding:"max=64"`
+	ZoneCode    string    `json:"zoneCode" binding:"required,min=2,max=64"`
 }
 
 type UpdateSoilReading struct {
@@ -32,4 +33,5 @@ type UpdateSoilReading struct {
 	EffectiveAt     time.Time `json:"effectiveAt" binding:"required"`
 	Evidence        string    `json:"evidence" binding:"max=2000"`
 	RelatedCode     string    `json:"relatedCode" binding:"max=64"`
+	ZoneCode        string    `json:"zoneCode" binding:"required,min=2,max=64"`
 }

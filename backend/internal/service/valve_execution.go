@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,11 +11,13 @@ import (
 	"github.com/blueship581/greenhouse-irrigation-strategy-control/backend/internal/dto"
 	"github.com/blueship581/greenhouse-irrigation-strategy-control/backend/internal/model"
 	"github.com/blueship581/greenhouse-irrigation-strategy-control/backend/internal/repository"
+	"gorm.io/gorm"
 )
 
 type ValveExecutionService interface {
 	List(context.Context, dto.PageQuery) (repository.Page[model.ValveExecution], error)
 	Get(context.Context, uint) (model.ValveExecution, error)
+	ControlDetail(context.Context, uint) (dto.ControlDetailResponse, error)
 	Create(context.Context, dto.CreateValveExecution, string, string) (model.ValveExecution, error)
 	Update(context.Context, uint, dto.UpdateValveExecution, string, string) (model.ValveExecution, error)
 	Transition(context.Context, uint, dto.TransitionRequest, string, string) (model.ValveExecution, error)
@@ -26,11 +29,18 @@ type ValveExecutionService interface {
 
 type valveExecutionService struct {
 	repository repository.ValveExecutionRepository
+	zones      repository.GreenhouseZoneRepository
+	plans      repository.IrrigationPlanRepository
+	readings   repository.SoilReadingRepository
 	security   SecurityService
+	checker    *preStartChecker
 }
 
-func NewValveExecutionService(repo repository.ValveExecutionRepository, security SecurityService) ValveExecutionService {
-	return &valveExecutionService{repository: repo, security: security}
+func NewValveExecutionService(repo repository.ValveExecutionRepository, zones repository.GreenhouseZoneRepository, plans repository.IrrigationPlanRepository, readings repository.SoilReadingRepository, security SecurityService) ValveExecutionService {
+	return &valveExecutionService{
+		repository: repo, zones: zones, plans: plans, readings: readings, security: security,
+		checker: newPreStartChecker(zones, plans, readings, repo),
+	}
 }
 
 func (s *valveExecutionService) List(ctx context.Context, query dto.PageQuery) (repository.Page[model.ValveExecution], error) {
@@ -41,8 +51,33 @@ func (s *valveExecutionService) Get(ctx context.Context, id uint) (model.ValveEx
 	return s.repository.Get(ctx, id)
 }
 
+// ControlDetail returns the execution with the persisted check snapshot when
+// one exists; otherwise it evaluates current data as a live preview so the
+// reviewer sees running tasks, the latest validated reading and the stop line
+// before confirming.
+func (s *valveExecutionService) ControlDetail(ctx context.Context, id uint) (dto.ControlDetailResponse, error) {
+	execution, err := s.repository.Get(ctx, id)
+	if err != nil {
+		return dto.ControlDetailResponse{}, err
+	}
+	snapshot, err := execution.Snapshot()
+	if err != nil {
+		return dto.ControlDetailResponse{}, fmt.Errorf("decode control check snapshot: %w", err)
+	}
+	if snapshot != nil {
+		return dto.ControlDetailResponse{Execution: execution, Snapshot: snapshot, Live: false}, nil
+	}
+	live := s.checker.evaluate(ctx, execution, "", time.Now().UTC())
+	return dto.ControlDetailResponse{Execution: execution, Snapshot: live, Live: true}, nil
+}
+
 func (s *valveExecutionService) Create(ctx context.Context, input dto.CreateValveExecution, actor, requestID string) (model.ValveExecution, error) {
 	if err := validateValveExecutionBusinessFields(input.Code, input.Name, input.Facility, input.Owner); err != nil {
+		return model.ValveExecution{}, err
+	}
+	zoneCode := strings.ToUpper(strings.TrimSpace(input.ZoneCode))
+	planCode := strings.ToUpper(strings.TrimSpace(input.PlanCode))
+	if err := s.validateReferences(ctx, zoneCode, planCode); err != nil {
 		return model.ValveExecution{}, err
 	}
 	item := model.ValveExecution{
@@ -55,11 +90,13 @@ func (s *valveExecutionService) Create(ctx context.Context, input dto.CreateValv
 		MetricValue: input.MetricValue, MetricUnit: strings.TrimSpace(input.MetricUnit),
 		EffectiveAt: input.EffectiveAt.UTC(), Evidence: strings.TrimSpace(input.Evidence),
 		RelatedCode: strings.ToUpper(strings.TrimSpace(input.RelatedCode)),
+		ZoneCode:    zoneCode, PlanCode: planCode,
+		ControlCheckStatus: model.ControlCheckStatusPending,
 	}
 	if err := s.repository.Create(ctx, &item); err != nil {
 		return model.ValveExecution{}, fmt.Errorf("create 阀门执行: %w", err)
 	}
-	_ = s.security.Audit(ctx, actor, requestID, "create", "ValveExecution", item.ID, "", item.Status, "created 阀门执行")
+	_ = s.security.Audit(ctx, actor, requestID, "create", "ValveExecution", item.ID, "", item.Status, fmt.Sprintf("created 阀门执行 linked to zone %s plan %s", zoneCode, planCode))
 	return item, nil
 }
 
@@ -69,6 +106,15 @@ func (s *valveExecutionService) Update(ctx context.Context, id uint, input dto.U
 		return model.ValveExecution{}, err
 	}
 	if err := validateValveExecutionBusinessFields(current.Code, input.Name, input.Facility, input.Owner); err != nil {
+		return model.ValveExecution{}, err
+	}
+	zoneCode := strings.ToUpper(strings.TrimSpace(input.ZoneCode))
+	planCode := strings.ToUpper(strings.TrimSpace(input.PlanCode))
+	if (current.ControlRequestedBy != "" || current.Status != string(constants.ExecutionStatePlanned)) &&
+		(zoneCode != current.ZoneCode || planCode != current.PlanCode) {
+		return model.ValveExecution{}, ErrReferenceLocked
+	}
+	if err := s.validateReferences(ctx, zoneCode, planCode); err != nil {
 		return model.ValveExecution{}, err
 	}
 	current.Name = strings.TrimSpace(input.Name)
@@ -82,6 +128,8 @@ func (s *valveExecutionService) Update(ctx context.Context, id uint, input dto.U
 	current.EffectiveAt = input.EffectiveAt.UTC()
 	current.Evidence = strings.TrimSpace(input.Evidence)
 	current.RelatedCode = strings.ToUpper(strings.TrimSpace(input.RelatedCode))
+	current.ZoneCode = zoneCode
+	current.PlanCode = planCode
 	current.Version = input.ExpectedVersion + 1
 	current.UpdatedAt = time.Now().UTC()
 	if err := s.repository.Update(ctx, id, input.ExpectedVersion, &current); err != nil {
@@ -89,6 +137,31 @@ func (s *valveExecutionService) Update(ctx context.Context, id uint, input dto.U
 	}
 	_ = s.security.Audit(ctx, actor, requestID, "update", "ValveExecution", id, current.Status, current.Status, "updated business fields")
 	return s.repository.Get(ctx, id)
+}
+
+// validateReferences ensures the execution points at an existing zone and
+// irrigation plan whose ZoneCode matches the execution zone.
+func (s *valveExecutionService) validateReferences(ctx context.Context, zoneCode, planCode string) error {
+	if zoneCode == "" || planCode == "" {
+		return ErrInvalidInput
+	}
+	if _, err := s.zones.FindByCode(ctx, zoneCode); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("%w: zone %s does not exist", ErrInvalidInput, zoneCode)
+		}
+		return err
+	}
+	plan, err := s.plans.FindByCode(ctx, planCode)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("%w: plan %s does not exist", ErrInvalidInput, planCode)
+		}
+		return err
+	}
+	if plan.ZoneCode != "" && !strings.EqualFold(plan.ZoneCode, zoneCode) {
+		return fmt.Errorf("%w: plan %s targets zone %s, not %s", ErrInvalidInput, planCode, plan.ZoneCode, zoneCode)
+	}
+	return nil
 }
 
 func (s *valveExecutionService) Transition(ctx context.Context, id uint, input dto.TransitionRequest, actor, requestID string) (model.ValveExecution, error) {
@@ -164,17 +237,52 @@ func (s *valveExecutionService) ConfirmControl(ctx context.Context, id uint, inp
 	if !constants.CanTransition(constants.ValveExecutionTransitions, current.Status, string(constants.ExecutionStateRunning)) {
 		return model.ValveExecution{}, ErrInvalidTransition
 	}
+
 	now := time.Now().UTC()
+	snapshot := s.checker.evaluate(ctx, current, actor, now)
+	rawSnapshot, err := marshalSnapshot(snapshot)
+	if err != nil {
+		return model.ValveExecution{}, err
+	}
+	current.ControlCheckSnapshot = rawSnapshot
+
+	if snapshot.Status == model.ControlCheckStatusBlocked {
+		// Conflicts freeze the execution in planned. The reviewer must resolve
+		// them (stop the other task, refresh the reading, etc.) and re-confirm.
+		batchNo := ""
+		if len(snapshot.Conflicts) > 0 {
+			batchNo = snapshot.Conflicts[0].Code
+			if idx := strings.LastIndex(batchNo, "-"); idx > 3 {
+				batchNo = batchNo[:idx]
+			}
+		}
+		current.ControlCheckStatus = model.ControlCheckStatusBlocked
+		current.ControlConflictNo = batchNo
+		current.ControlDetail = describeConflicts(snapshot)
+		current.Version = input.ExpectedVersion + 1
+		current.UpdatedAt = now
+		if err := s.repository.Update(ctx, id, input.ExpectedVersion, &current); err != nil {
+			return model.ValveExecution{}, fmt.Errorf("persist blocked control check: %w", err)
+		}
+		if err := s.security.Audit(ctx, actor, requestID, "control_conflict", "ValveExecution", id, current.Status, current.Status, current.ControlDetail); err != nil {
+			return model.ValveExecution{}, fmt.Errorf("persist control conflict audit: %w", err)
+		}
+		return s.repository.Get(ctx, id)
+	}
+
 	before := current.Status
 	current.Status = string(constants.ExecutionStateRunning)
 	current.ControlConfirmedBy = actor
 	current.ControlConfirmedAt = &now
+	current.ControlCheckStatus = model.ControlCheckStatusPassed
+	current.ControlConflictNo = ""
+	current.ControlDetail = describePass(snapshot)
 	current.Version = input.ExpectedVersion + 1
 	current.UpdatedAt = now
 	if err := s.repository.Update(ctx, id, input.ExpectedVersion, &current); err != nil {
 		return model.ValveExecution{}, fmt.Errorf("confirm remote valve start: %w", err)
 	}
-	detail := fmt.Sprintf("requested by %s; confirmed independently: %s", current.ControlRequestedBy, input.Reason)
+	detail := fmt.Sprintf("requested by %s; confirmed independently: %s | %s", current.ControlRequestedBy, input.Reason, current.ControlDetail)
 	if err := s.security.Audit(ctx, actor, requestID, "control_confirm", "ValveExecution", id, before, current.Status, detail); err != nil {
 		return model.ValveExecution{}, fmt.Errorf("persist control confirmation audit: %w", err)
 	}

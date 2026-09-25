@@ -35,9 +35,10 @@ export function EntityPage({ config, useStore, renderMetric, onInspect, inspectL
 
   const createDemo = async () => {
     const now = Date.now();
+    const extra = config.resolveDemoFields ? config.resolveDemoFields(session) : {};
     await createRecord(config.path, { code: `${config.key.toUpperCase()}-${now.toString().slice(-6)}`, name: `新增${config.label}`,
       description: '通过前端工作台创建的业务记录', facility: '默认作业区', owner: session?.username || '现场操作员', category: '常规', riskLevel: 'medium',
-      metricValue: 42, metricUnit: config.path === 'zones' || config.path === 'readings' ? '%' : 'L/min', effectiveAt: new Date().toISOString(), evidence: '已完成创建前检查', relatedCode: '' });
+      metricValue: 42, metricUnit: config.path === 'zones' || config.path === 'readings' ? '%' : 'L/min', effectiveAt: new Date().toISOString(), evidence: '已完成创建前检查', relatedCode: '', ...extra });
     setShowCreate(false);
   };
 

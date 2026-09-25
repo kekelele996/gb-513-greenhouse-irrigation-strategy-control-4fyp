@@ -21,6 +21,7 @@ func (h *ValveExecutionHandler) Register(group *gin.RouterGroup) {
 	resource := group.Group("/executions")
 	resource.GET("", h.list)
 	resource.GET("/:id", h.get)
+	resource.GET("/:id/control-detail", h.controlDetail)
 	resource.POST("", middleware.RequireRoles(model.RoleOperator, model.RoleAdmin), h.create)
 	resource.PUT("/:id", middleware.RequireRoles(model.RoleOperator, model.RoleAdmin), h.update)
 	resource.POST("/:id/transition", middleware.RequireRoles(model.RoleOperator, model.RoleReviewer, model.RoleAdmin), h.transition)
@@ -50,6 +51,25 @@ func (h *ValveExecutionHandler) get(c *gin.Context) {
 		return
 	}
 	util.OK(c, item)
+}
+
+func (h *ValveExecutionHandler) controlDetail(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	detail, err := h.service.ControlDetail(c.Request.Context(), id)
+	if err != nil {
+		handleError(c, err)
+		return
+	}
+	// util.OK wraps the payload as {data: ...}; unwrap the DTO fields so the
+	// contract stays {execution, snapshot, live} instead of a nested data key.
+	util.OK(c, gin.H{
+		"execution": detail.Execution,
+		"snapshot":  detail.Snapshot,
+		"live":      detail.Live,
+	})
 }
 
 func (h *ValveExecutionHandler) create(c *gin.Context) {

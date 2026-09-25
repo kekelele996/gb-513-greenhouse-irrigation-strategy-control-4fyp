@@ -53,6 +53,7 @@ func (s *soilReadingService) Create(ctx context.Context, input dto.CreateSoilRea
 		MetricValue: input.MetricValue, MetricUnit: strings.TrimSpace(input.MetricUnit),
 		EffectiveAt: input.EffectiveAt.UTC(), Evidence: strings.TrimSpace(input.Evidence),
 		RelatedCode: strings.ToUpper(strings.TrimSpace(input.RelatedCode)),
+		ZoneCode:    strings.ToUpper(strings.TrimSpace(input.ZoneCode)),
 	}
 	if err := s.repository.Create(ctx, &item); err != nil {
 		return model.SoilReading{}, fmt.Errorf("create 土壤读数: %w", err)
@@ -80,6 +81,7 @@ func (s *soilReadingService) Update(ctx context.Context, id uint, input dto.Upda
 	current.EffectiveAt = input.EffectiveAt.UTC()
 	current.Evidence = strings.TrimSpace(input.Evidence)
 	current.RelatedCode = strings.ToUpper(strings.TrimSpace(input.RelatedCode))
+	current.ZoneCode = strings.ToUpper(strings.TrimSpace(input.ZoneCode))
 	current.Version = input.ExpectedVersion + 1
 	current.UpdatedAt = time.Now().UTC()
 	if err := s.repository.Update(ctx, id, input.ExpectedVersion, &current); err != nil {
