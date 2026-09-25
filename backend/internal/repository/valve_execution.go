@@ -12,6 +12,7 @@ import (
 type ValveExecutionRepository interface {
 	List(context.Context, dto.PageQuery) (Page[model.ValveExecution], error)
 	Get(context.Context, uint) (model.ValveExecution, error)
+	RunningByZone(context.Context, string, uint) ([]model.ValveExecution, error)
 	Create(context.Context, *model.ValveExecution) error
 	Update(context.Context, uint, uint, *model.ValveExecution) error
 	Delete(context.Context, uint) error
@@ -31,6 +32,18 @@ func (r *valveExecutionRepository) List(ctx context.Context, q dto.PageQuery) (P
 }
 func (r *valveExecutionRepository) Get(ctx context.Context, id uint) (model.ValveExecution, error) {
 	return r.store.Get(ctx, id)
+}
+
+// RunningByZone returns executions currently watering the same zone, excluding
+// the execution being reviewed so it cannot conflict with itself.
+func (r *valveExecutionRepository) RunningByZone(ctx context.Context, zoneCode string, excludeID uint) ([]model.ValveExecution, error) {
+	items := make([]model.ValveExecution, 0)
+	err := r.store.db.WithContext(ctx).
+		Where("status = ?", "running").
+		Where("zone_code = ?", zoneCode).
+		Where("id <> ?", excludeID).
+		Order("updated_at DESC, id DESC").Find(&items).Error
+	return items, err
 }
 func (r *valveExecutionRepository) Create(ctx context.Context, item *model.ValveExecution) error {
 	return r.store.Create(ctx, item)

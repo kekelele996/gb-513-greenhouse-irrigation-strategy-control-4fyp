@@ -12,6 +12,7 @@ import (
 type IrrigationPlanRepository interface {
 	List(context.Context, dto.PageQuery) (Page[model.IrrigationPlan], error)
 	Get(context.Context, uint) (model.IrrigationPlan, error)
+	GetByCode(context.Context, string) (model.IrrigationPlan, error)
 	Create(context.Context, *model.IrrigationPlan) error
 	Update(context.Context, uint, uint, *model.IrrigationPlan) error
 	Delete(context.Context, uint) error
@@ -31,6 +32,11 @@ func (r *irrigationPlanRepository) List(ctx context.Context, q dto.PageQuery) (P
 }
 func (r *irrigationPlanRepository) Get(ctx context.Context, id uint) (model.IrrigationPlan, error) {
 	return r.store.Get(ctx, id)
+}
+func (r *irrigationPlanRepository) GetByCode(ctx context.Context, code string) (model.IrrigationPlan, error) {
+	var item model.IrrigationPlan
+	err := r.store.db.WithContext(ctx).Where("code = ?", code).First(&item).Error
+	return item, err
 }
 func (r *irrigationPlanRepository) Create(ctx context.Context, item *model.IrrigationPlan) error {
 	return r.store.Create(ctx, item)

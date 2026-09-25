@@ -17,9 +17,10 @@ interface EntityPageProps {
   inspectLabel?: string;
   transitionRoles?: string[];
   allowTransition?: (item: DomainRecord, next: string) => boolean;
+  onCreateCustom?: () => Promise<void>;
 }
 
-export function EntityPage({ config, useStore, renderMetric, onInspect, inspectLabel = '查看详情', transitionRoles = ['operator', 'reviewer', 'admin'], allowTransition = () => true }: EntityPageProps) {
+export function EntityPage({ config, useStore, renderMetric, onInspect, inspectLabel = '查看详情', transitionRoles = ['operator', 'reviewer', 'admin'], allowTransition = () => true, onCreateCustom }: EntityPageProps) {
   const { session } = useAuth();
   const { items, meta, loading, error, load, createRecord, transition } = useStore();
   const [search, setSearch] = useState('');
@@ -50,7 +51,7 @@ export function EntityPage({ config, useStore, renderMetric, onInspect, inspectL
       {items.map((item) => { const next = nextStatus(item.status, config.statuses); const mayAdvance = next && canTransition && allowTransition(item, next); return <tr key={item.id}><td><strong>{item.code}</strong></td><td>{item.name}<small>{item.facility}</small></td><td><StatusBadge status={item.status}/></td><td>{item.riskLevel}</td><td>{item.owner}</td><td>{renderMetric ? renderMetric(item) : <>{item.metricValue} {item.metricUnit}</>}</td><td>{formatDate(item.updatedAt)}</td><td><div className="table-actions">{onInspect && <button className="table-action" onClick={() => onInspect(item)}>{inspectLabel}</button>}{mayAdvance && <button className="table-action" onClick={() => setPending({ item, status: next })}>推进至 {next}</button>}{!onInspect && !mayAdvance && <span className="muted">{next ? '无操作权限' : '流程结束'}</span>}</div></td></tr>; })}
       {!items.length && !loading && <tr><td colSpan={8} className="empty">暂无记录</td></tr>}
     </tbody></table>{loading && <div className="loading">正在同步业务数据...</div>}</section>
-    <ConfirmDialog open={showCreate} title={`新增${config.label}`} onCancel={() => setShowCreate(false)} onConfirm={() => { void createDemo().catch(() => undefined); }}><p>将创建一条包含完整责任人、风险和证据信息的演示记录。</p></ConfirmDialog>
+    <ConfirmDialog open={showCreate} title={`新增${config.label}`} onCancel={() => setShowCreate(false)} onConfirm={() => { if (onCreateCustom) { void onCreateCustom().then(() => setShowCreate(false)).catch(() => undefined); } else { void createDemo().catch(() => undefined); } }}><p>{config.path === 'executions' ? '将按现有温室分区和灌溉计划自动建立关联，再创建一条待启动的阀门执行记录。' : '将创建一条包含完整责任人、风险和证据信息的演示记录。'}</p></ConfirmDialog>
     <ConfirmDialog open={Boolean(pending)} title="确认状态迁移" onCancel={() => setPending(null)} onConfirm={() => { if (pending) void transition(config.path, pending.item, pending.status).then(() => setPending(null)).catch(() => undefined); }}><p>状态迁移会写入审计日志，且使用版本号避免并发覆盖。</p><strong>{pending?.item.status} → {pending?.status}</strong></ConfirmDialog>
   </main>;
 }

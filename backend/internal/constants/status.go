@@ -1,7 +1,13 @@
 package constants
 
+import "time"
+
 // Shared status values are mirrored in frontend/src/types/status.ts. Keeping
 // the lists explicit makes state-machine drift visible during code review.
+
+// ReadingFreshnessWindow bounds how old the latest validated soil reading may
+// be at remote valve start: night shifts must not confirm against stale data.
+const ReadingFreshnessWindow = 30 * time.Minute
 
 type ZoneState string
 

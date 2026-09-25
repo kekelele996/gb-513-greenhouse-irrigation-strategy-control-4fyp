@@ -52,7 +52,9 @@ func (s *irrigationPlanService) Create(ctx context.Context, input dto.CreateIrri
 		Category: strings.TrimSpace(input.Category), RiskLevel: input.RiskLevel,
 		MetricValue: input.MetricValue, MetricUnit: strings.TrimSpace(input.MetricUnit),
 		EffectiveAt: input.EffectiveAt.UTC(), Evidence: strings.TrimSpace(input.Evidence),
-		RelatedCode: strings.ToUpper(strings.TrimSpace(input.RelatedCode)),
+		RelatedCode:  strings.ToUpper(strings.TrimSpace(input.RelatedCode)),
+		ZoneCode:     strings.ToUpper(strings.TrimSpace(input.ZoneCode)),
+		StopMoisture: input.StopMoisture,
 	}
 	if err := s.repository.Create(ctx, &item); err != nil {
 		return model.IrrigationPlan{}, fmt.Errorf("create 灌溉计划: %w", err)
@@ -80,6 +82,8 @@ func (s *irrigationPlanService) Update(ctx context.Context, id uint, input dto.U
 	current.EffectiveAt = input.EffectiveAt.UTC()
 	current.Evidence = strings.TrimSpace(input.Evidence)
 	current.RelatedCode = strings.ToUpper(strings.TrimSpace(input.RelatedCode))
+	current.ZoneCode = strings.ToUpper(strings.TrimSpace(input.ZoneCode))
+	current.StopMoisture = input.StopMoisture
 	current.Version = input.ExpectedVersion + 1
 	current.UpdatedAt = time.Now().UTC()
 	if err := s.repository.Update(ctx, id, input.ExpectedVersion, &current); err != nil {

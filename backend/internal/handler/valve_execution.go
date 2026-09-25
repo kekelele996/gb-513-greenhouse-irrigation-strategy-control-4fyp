@@ -25,6 +25,7 @@ func (h *ValveExecutionHandler) Register(group *gin.RouterGroup) {
 	resource.PUT("/:id", middleware.RequireRoles(model.RoleOperator, model.RoleAdmin), h.update)
 	resource.POST("/:id/transition", middleware.RequireRoles(model.RoleOperator, model.RoleReviewer, model.RoleAdmin), h.transition)
 	resource.POST("/:id/control-request", middleware.RequireRoles(model.RoleOperator, model.RoleAdmin), h.requestControl)
+	resource.GET("/:id/control-check", h.preStartCheck)
 	resource.POST("/:id/control-confirm", middleware.RequireRoles(model.RoleReviewer, model.RoleAdmin), h.confirmControl)
 	resource.DELETE("/:id", middleware.RequireRoles(model.RoleAdmin), h.remove)
 }
@@ -118,6 +119,19 @@ func (h *ValveExecutionHandler) requestControl(c *gin.Context) {
 		return
 	}
 	util.OK(c, item)
+}
+
+func (h *ValveExecutionHandler) preStartCheck(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	view, err := h.service.PreStartCheck(c.Request.Context(), id)
+	if err != nil {
+		handleError(c, err)
+		return
+	}
+	util.OK(c, view)
 }
 
 func (h *ValveExecutionHandler) confirmControl(c *gin.Context) {

@@ -12,6 +12,7 @@ import (
 type GreenhouseZoneRepository interface {
 	List(context.Context, dto.PageQuery) (Page[model.GreenhouseZone], error)
 	Get(context.Context, uint) (model.GreenhouseZone, error)
+	GetByCode(context.Context, string) (model.GreenhouseZone, error)
 	Create(context.Context, *model.GreenhouseZone) error
 	Update(context.Context, uint, uint, *model.GreenhouseZone) error
 	Delete(context.Context, uint) error
@@ -31,6 +32,11 @@ func (r *greenhouseZoneRepository) List(ctx context.Context, q dto.PageQuery) (P
 }
 func (r *greenhouseZoneRepository) Get(ctx context.Context, id uint) (model.GreenhouseZone, error) {
 	return r.store.Get(ctx, id)
+}
+func (r *greenhouseZoneRepository) GetByCode(ctx context.Context, code string) (model.GreenhouseZone, error) {
+	var item model.GreenhouseZone
+	err := r.store.db.WithContext(ctx).Where("code = ?", code).First(&item).Error
+	return item, err
 }
 func (r *greenhouseZoneRepository) Create(ctx context.Context, item *model.GreenhouseZone) error {
 	return r.store.Create(ctx, item)

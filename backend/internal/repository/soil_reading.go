@@ -12,6 +12,7 @@ import (
 type SoilReadingRepository interface {
 	List(context.Context, dto.PageQuery) (Page[model.SoilReading], error)
 	Get(context.Context, uint) (model.SoilReading, error)
+	LatestValidatedByZone(ctx context.Context, zoneCode, relatedCode string) (model.SoilReading, error)
 	Create(context.Context, *model.SoilReading) error
 	Update(context.Context, uint, uint, *model.SoilReading) error
 	Delete(context.Context, uint) error
@@ -31,6 +32,17 @@ func (r *soilReadingRepository) List(ctx context.Context, q dto.PageQuery) (Page
 }
 func (r *soilReadingRepository) Get(ctx context.Context, id uint) (model.SoilReading, error) {
 	return r.store.Get(ctx, id)
+}
+
+// LatestValidatedByZone returns the most recent validated reading measured in
+// the given zone. Records created before zone links existed fall back to the
+// shared RelatedCode of the zone/reading pair.
+func (r *soilReadingRepository) LatestValidatedByZone(ctx context.Context, zoneCode, relatedCode string) (model.SoilReading, error) {
+	var item model.SoilReading
+	db := r.store.db.WithContext(ctx).Where("status = ?", "validated").
+		Where("zone_code = ? OR (zone_code = '' AND related_code = ?)", zoneCode, relatedCode)
+	err := db.Order("effective_at DESC, id DESC").First(&item).Error
+	return item, err
 }
 func (r *soilReadingRepository) Create(ctx context.Context, item *model.SoilReading) error {
 	return r.store.Create(ctx, item)

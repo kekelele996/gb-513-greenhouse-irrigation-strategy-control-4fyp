@@ -20,7 +20,9 @@ func handleError(c *gin.Context, err error) {
 	case errors.Is(err, service.ErrInvalidTransition), errors.Is(err, service.ErrInvalidInput),
 		errors.Is(err, service.ErrDualConfirmation), errors.Is(err, service.ErrControlRequested),
 		errors.Is(err, service.ErrControlNotRequested), errors.Is(err, service.ErrSelfConfirmation),
-		errors.Is(err, service.ErrExplicitConfirmation):
+		errors.Is(err, service.ErrExplicitConfirmation),
+		errors.Is(err, service.ErrZoneNotFound), errors.Is(err, service.ErrPlanNotFound),
+		errors.Is(err, service.ErrPlanZoneMismatch), errors.Is(err, service.ErrPlanMissingStopLine):
 		util.Fail(c, http.StatusUnprocessableEntity, "business_rule", err.Error())
 	default:
 		_ = c.Error(err)

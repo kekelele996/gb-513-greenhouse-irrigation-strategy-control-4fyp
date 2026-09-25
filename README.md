@@ -46,6 +46,7 @@ docker compose down -v --remove-orphans
 - 提供脱敏运行配置、当前会话、审计汇总和单实体审计历史接口。
 - `MoistureBadge` 在分区和读数页统一展示含水率，`PlanDrawer` 在计划和执行页复用。
 - `useAuth` 提供安全会话与演示角色切换，`usePolling` 每 30 秒刷新工作台数据。
+- 阀门执行强制关联温室分区与灌溉计划；复核人可通过 `GET /api/executions/:id/control-check` 预览同分区运行中任务、最近一次已校验读数（30 分钟有效期）和计划停灌线。
 
 ## RBAC 与远程启动红线
 
@@ -59,7 +60,13 @@ docker compose down -v --remove-orphans
 | 独立确认并启动阀门 | reviewer/admin，且不得与请求人相同 |
 | 删除记录 | admin |
 
-阀门执行不能通过通用状态接口直接从 `planned` 进入 `running`。操作员先调用 `POST /api/executions/:id/control-request`，另一位复核人再调用 `POST /api/executions/:id/control-confirm`；两步都要求显式确认、正确版本号，并分别写入 `control_request`、`control_confirm` 审计事件。
+阀门执行不能通过通用状态接口直接从 `planned` 进入 `running`。操作员先调用 `POST /api/executions/:id/control-request`，另一位复核人先在控制详情（`GET /api/executions/:id/control-check`）核对以下三项，再调用 `POST /api/executions/:id/control-confirm`；两步都要求显式确认、正确版本号，并分别写入 `control_request`、`control_confirm` 审计事件：
+
+1. **同分区运行中任务**：同一 `zoneCode` 下若已有 `running` 的阀门执行（该分区可能正在浇水），判定冲突。
+2. **最近一次已校验读数**：取该分区最新一条 `validated` 土壤读数；没有已校验读数，或读数时间早于确认时刻 30 分钟（防止夜班拿半小时前的读数启动），判定冲突。
+3. **计划停灌线**：关联灌溉计划必须属于该分区并设置了 `stopMoisture`（含水率停灌线，%）；读数含水率达到或超过停灌线，判定冲突。
+
+存在冲突时执行状态保持 `planned`（待启动），不会进入双人启动；服务端在控制详情中写入冲突编号（如 `CFL-VE-002-001`，多项冲突追加 `-A/-B`）、读数时间、含水率和冲突说明，并写入 `control_blocked` 审计事件。冲突消除后复核人可重新确认；检查通过时阀门才进入 `running`，并保存当时的检查快照（复核人、复核时刻、读数编号/时间/含水率/读数年龄、停灌线、同分区运行中任务数）到 `controlCheckSnapshot`。阀门执行创建/更新时必须提供真实存在的 `zoneCode` 与属于该分区的 `planCode`。
 
 ## 技术栈
 

@@ -16,6 +16,9 @@ type SoilReading struct {
 	EffectiveAt time.Time `json:"effectiveAt"`
 	Evidence    string    `json:"evidence" gorm:"size:2000"`
 	RelatedCode string    `json:"relatedCode" gorm:"size:64;index"`
+	// ZoneCode links the reading to the greenhouse zone it was measured in.
+	// Pre-start checks use the latest validated reading of the execution's zone.
+	ZoneCode string `json:"zoneCode" gorm:"size:64;index"`
 }
 
 func (item *SoilReading) GetBase() *BaseModel { return &item.BaseModel }

@@ -20,6 +20,20 @@ type ValveExecution struct {
 	ControlRequestedAt *time.Time `json:"controlRequestedAt"`
 	ControlConfirmedBy string     `json:"controlConfirmedBy" gorm:"size:80;index"`
 	ControlConfirmedAt *time.Time `json:"controlConfirmedAt"`
+
+	// ZoneCode/PlanCode attach the execution to its greenhouse zone and the
+	// irrigation plan being executed; pre-start checks are scoped to that zone.
+	ZoneCode string `json:"zoneCode" gorm:"size:64;index"`
+	PlanCode string `json:"planCode" gorm:"size:64;index"`
+
+	// ControlCheckResult records the latest independent pre-start review:
+	// pass enters the two-person start, blocked keeps the execution planned.
+	ControlCheckResult   string     `json:"controlCheckResult" gorm:"size:24;index"`
+	ControlCheckBy       string     `json:"controlCheckBy" gorm:"size:80;index"`
+	ControlCheckAt       *time.Time `json:"controlCheckAt"`
+	ControlConflictNo    string     `json:"controlConflictNo" gorm:"size:64;index"`
+	ControlDetail        string     `json:"controlDetail" gorm:"size:2000"`
+	ControlCheckSnapshot string     `json:"controlCheckSnapshot" gorm:"type:text"`
 }
 
 func (item *ValveExecution) GetBase() *BaseModel { return &item.BaseModel }
@@ -27,3 +41,9 @@ func (item *ValveExecution) GetBase() *BaseModel { return &item.BaseModel }
 func (item ValveExecution) TableName() string { return "valve_executions" }
 
 var ValveExecutionInitialStatus = "planned"
+
+// Pre-start review outcomes stored in ControlCheckResult.
+const (
+	ControlCheckPassed  = "passed"
+	ControlCheckBlocked = "blocked"
+)

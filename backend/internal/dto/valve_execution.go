@@ -17,6 +17,10 @@ type CreateValveExecution struct {
 	EffectiveAt time.Time `json:"effectiveAt" binding:"required"`
 	Evidence    string    `json:"evidence" binding:"max=2000"`
 	RelatedCode string    `json:"relatedCode" binding:"max=64"`
+	// ZoneCode/PlanCode attach the execution to a zone and its irrigation plan;
+	// both must reference existing records before remote start can be reviewed.
+	ZoneCode string `json:"zoneCode" binding:"required,max=64"`
+	PlanCode string `json:"planCode" binding:"required,max=64"`
 }
 
 type UpdateValveExecution struct {
@@ -30,6 +34,8 @@ type UpdateValveExecution struct {
 	MetricValue     float64   `json:"metricValue"`
 	MetricUnit      string    `json:"metricUnit" binding:"max=24"`
 	EffectiveAt     time.Time `json:"effectiveAt" binding:"required"`
-	Evidence        string    `json:"evidence" binding:"max=2000"`
+	Evidence        string    `json:"evidence" binding:"max:2000"`
 	RelatedCode     string    `json:"relatedCode" binding:"max=64"`
+	ZoneCode        string    `json:"zoneCode" binding:"required,max=64"`
+	PlanCode        string    `json:"planCode" binding:"required,max=64"`
 }
